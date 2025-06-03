@@ -1,11 +1,20 @@
 import jsonfile from "jsonfile";
 import moment from "moment";
 import simpleGit from "simple-git";
-import random from "random";
+import fs from "fs";
 
+const git = simpleGit();
 const path = "./data.json";
 
-const markCommit = (x, y) => {
+const makeCommits = async (n) => {
+  if (n <= 0) {
+    console.log("Done committing.");
+    return git.push();
+  }
+
+  const x = Math.floor(Math.random() * 55); // weeks
+  const y = Math.floor(Math.random() * 7);  // days
+
   const date = moment()
     .subtract(1, "y")
     .add(1, "d")
@@ -13,27 +22,23 @@ const markCommit = (x, y) => {
     .add(y, "d")
     .format();
 
-  const data = {
-    date: date,
-  };
+  const data = { date };
 
-  jsonfile.writeFile(path, data, () => {
-    simpleGit().add([path]).commit(date, { "--date": date }).push();
-  });
-};
+  console.log(`Committing on ${date}`);
 
-const makeCommits = (n) => {
-  if(n===0) return simpleGit().push();
-  const x = random.int(0, 54);
-  const y = random.int(0, 6);
-  const date = moment().subtract(1, "y").add(1, "d").add(x, "w").add(y, "d").format();
+  jsonfile.writeFile(path, data, async (err) => {
+    if (err) {
+      console.error("Failed to write file:", err);
+      return;
+    }
 
-  const data = {
-    date: date,
-  };
-  console.log(date);
-  jsonfile.writeFile(path, data, () => {
-    simpleGit().add([path]).commit(date, { "--date": date },makeCommits.bind(this,--n));
+    try {
+      await git.add([path]);
+      await git.commit(date, undefined, { "--date": date });
+      makeCommits(n - 1);
+    } catch (e) {
+      console.error("Git operation failed:", e);
+    }
   });
 };
 
