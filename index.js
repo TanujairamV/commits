@@ -1,45 +1,57 @@
 import jsonfile from "jsonfile";
 import moment from "moment";
 import simpleGit from "simple-git";
-import fs from "fs";
 
-const git = simpleGit();
 const path = "./data.json";
 
-const makeCommits = async (n) => {
-  if (n <= 0) {
-    console.log("Done committing.");
-    return git.push();
-  }
+const gradientLevels = {
+  0: 0,    // No commit
+  1: 1,    // Lightest
+  2: 3,    // Light
+  3: 5,    // Medium
+  4: 8     // Strongest
+};
 
-  const x = Math.floor(Math.random() * 55); // weeks
-  const y = Math.floor(Math.random() * 7);  // days
+// Load the pattern from data.json
+const pattern = jsonfile.readFileSync(path);
 
-  const date = moment()
-    .subtract(1, "y")
-    .add(1, "d")
-    .add(x, "w")
-    .add(y, "d")
-    .format();
-
+const makeCommit = (date) => {
   const data = { date };
-
-  console.log(`Committing on ${date}`);
-
-  jsonfile.writeFile(path, data, async (err) => {
-    if (err) {
-      console.error("Failed to write file:", err);
-      return;
-    }
-
-    try {
-      await git.add([path]);
-      await git.commit(date, undefined, { "--date": date });
-      makeCommits(n - 1);
-    } catch (e) {
-      console.error("Git operation failed:", e);
-    }
+  return new Promise((resolve, reject) => {
+    jsonfile.writeFile(path, data, (err) => {
+      if (err) return reject(err);
+      simpleGit()
+        .add([path])
+        .commit(date, { "--date": date })
+        .then(() => resolve())
+        .catch(reject);
+    });
   });
 };
 
-makeCommits(100);
+const runCommits = async () => {
+  const startDate = moment().subtract(1, "year").add(1, "day"); // Start one year ago + 1 day
+  const weeks = pattern[0].length;
+  const rows = pattern.length;
+
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < rows; d++) {
+      const level = pattern[d][w];
+      if (level === 0) continue;
+
+      const commitsCount = gradientLevels[level];
+      const date = startDate.clone().add(w, "weeks").add(d, "days").format();
+
+      for (let c = 0; c < commitsCount; c++) {
+        await makeCommit(date);
+        console.log(`Committed on ${date} with intensity ${level}`);
+      }
+    }
+  }
+
+  // Final push
+  await simpleGit().push();
+  console.log("All commits pushed!");
+};
+
+runCommits().catch(console.error);
